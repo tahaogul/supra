@@ -1,14 +1,10 @@
 import { select } from '@inquirer/prompts';
-import { writeFileSync, existsSync, readFileSync } from 'fs';
+import { writeFileSync, existsSync, readFileSync, appendFileSync, chmodSync } from 'fs';
 import { join } from 'path';
-import {
-  getActiveAccount,
-  getAccount,
-  getAccounts,
-} from '../lib/config.js';
+import { getAccounts } from '../lib/config.js';
 import { getProjects, getProjectApiKeys } from '../lib/supabase.js';
-import { success, error, info, spinner, heading } from '../utils/ui.js';
-import { execSync } from 'child_process';
+import { success, error, info, spinner, heading, warn } from '../utils/ui.js';
+import { execFileSync } from 'child_process';
 
 interface SupraLink {
   accountAlias: string;
@@ -77,21 +73,28 @@ export async function linkCommand(): Promise<void> {
       anonKey,
     };
 
-    writeFileSync(
-      join(process.cwd(), LINK_FILE),
-      JSON.stringify(linkData, null, 2)
-    );
+    const linkPath = join(process.cwd(), LINK_FILE);
+    // .supra proje anahtarları içerir → yalnızca sahibi okuyabilsin (0600)
+    writeFileSync(linkPath, JSON.stringify(linkData, null, 2), { mode: 0o600 });
+    try {
+      chmodSync(linkPath, 0o600);
+    } catch {
+      // Windows vb. platformlarda izin ayarlanamayabilir
+    }
 
     success(`Linked to "${project.name}" (${projectRef})`);
     info(`Supabase URL: https://${projectRef}.supabase.co`);
     info(`Config saved to .supra`);
 
+    // .supra ASLA commit edilmemeli — .gitignore'a ekle
+    ensureGitignored();
+
     try {
-      const account = getAccount(accountAlias)!;
-      execSync(
-        `npx supabase link --project-ref ${projectRef}`,
-        { stdio: 'ignore' }
-      );
+      // Argümanlar dizi olarak geçirilir (shell yok, enjeksiyon yok)
+      execFileSync('npx', ['supabase', 'link', '--project-ref', projectRef], {
+        stdio: 'ignore',
+        shell: false,
+      });
     } catch {
       // Supabase CLI might not be installed
     }
@@ -111,6 +114,34 @@ export async function unlinkCommand(): Promise<void> {
   const { unlinkSync } = await import('fs');
   unlinkSync(linkPath);
   success('Unlinked from Supabase project.');
+}
+
+/**
+ * .supra dosyası proje anahtarları içerdiği için repoya girmemeli.
+ * Proje .gitignore'unda yoksa ekler (dosya yoksa oluşturur) ve kullanıcıyı bilgilendirir.
+ */
+function ensureGitignored(): void {
+  const gitignorePath = join(process.cwd(), '.gitignore');
+  try {
+    if (existsSync(gitignorePath)) {
+      const content = readFileSync(gitignorePath, 'utf-8');
+      const alreadyListed = content
+        .split(/\r?\n/)
+        .some((line) => line.trim() === '.supra' || line.trim() === '/.supra');
+      if (alreadyListed) return;
+
+      const prefix = content.endsWith('\n') || content === '' ? '' : '\n';
+      appendFileSync(gitignorePath, `${prefix}\n# supra project link (contains API keys)\n.supra\n`);
+    } else {
+      writeFileSync(
+        gitignorePath,
+        '# supra project link (contains API keys)\n.supra\n'
+      );
+    }
+    info('.supra added to .gitignore — do not commit it.');
+  } catch (err) {
+    warn(`Could not update .gitignore: ${(err as Error).message}. Add ".supra" manually!`);
+  }
 }
 
 export function getLinkInfo(): SupraLink | null {

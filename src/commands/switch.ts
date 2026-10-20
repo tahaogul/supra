@@ -2,12 +2,13 @@ import { select } from '@inquirer/prompts';
 import {
   getAccounts,
   getAccount,
+  getAccountWithTokens,
   setActiveAccount,
   getActiveAccount,
 } from '../lib/config.js';
 import { success, error, info, spinner } from '../utils/ui.js';
 import { getProjects } from '../lib/supabase.js';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export async function switchCommand(aliasArg?: string): Promise<void> {
   const accounts = getAccounts();
@@ -44,9 +45,18 @@ export async function switchCommand(aliasArg?: string): Promise<void> {
     setActiveAccount(alias);
 
     try {
-      execSync(`npx supabase login --token ${account.accessToken}`, {
-        stdio: 'ignore',
-      });
+      // GÜVENLİK: Token ASLA komut satırı argümanı olarak geçirilmez —
+      // `ps aux` ile makinedeki her kullanıcı görebilirdi.
+      // Bunun yerine SUPABASE_ACCESS_TOKEN ortam değişkeni kullanılır ve
+      // argümanlar dizi olarak verilir (shell devreye girmez).
+      const withTokens = await getAccountWithTokens(alias);
+      if (withTokens) {
+        execFileSync('npx', ['supabase', 'login'], {
+          env: { ...process.env, SUPABASE_ACCESS_TOKEN: withTokens.accessToken },
+          stdio: 'ignore',
+          shell: false,
+        });
+      }
     } catch {
       // Supabase CLI might not be installed — that's fine
     }

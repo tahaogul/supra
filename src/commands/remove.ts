@@ -38,7 +38,8 @@ export async function removeCommand(aliasArg?: string): Promise<void> {
     return;
   }
 
-  if (removeAccount(alias)) {
+  // Keychain'deki token'lar da silinir
+  if (await removeAccount(alias)) {
     success(`Account "${alias}" removed from supra.`);
   } else {
     error(`Failed to remove "${alias}".`);

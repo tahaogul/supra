@@ -54,10 +54,18 @@ supra remove client1
 
 ## How It Works
 
-- Accounts are stored in `~/.config/supra/config.json` (tokens are encrypted at rest via OS keychain in future versions)
-- When you `supra switch`, the Supabase CLI is automatically re-authenticated with the selected account's token
-- `supra link` creates a `.supra` file in your project directory with the connection info
-- Tokens are automatically refreshed when expired
+- **Access & refresh tokens are stored in the OS keychain** (via `keytar`) — never in a plain-text file.
+- Non-secret metadata (alias, email, token expiry) is stored by [`conf`](https://github.com/sindresorhus/conf):
+  - macOS: `~/Library/Preferences/supra-nodejs/config.json`
+  - Linux: `~/.config/supra-nodejs/config.json`
+  - Windows: `%APPDATA%\supra-nodejs\Config\config.json`
+- If the OS keychain is unavailable, Supra falls back to storing tokens in that file — and enforces `0600` on the file and `0700` on its directory. You will see a warning when this happens.
+- Upgrading from an older version: any plain-text tokens left in `config.json` are migrated into the keychain on first use, and the file permissions are tightened automatically.
+- When you `supra switch`, the Supabase CLI is re-authenticated using the `SUPABASE_ACCESS_TOKEN` environment variable — the token is **never** passed as a command-line argument (which would be visible to any user via `ps`).
+- `supra link` creates a `.supra` file in your project directory with the connection info. It is written with `0600` permissions and automatically added to your project's `.gitignore` — **do not commit it**.
+- Tokens are automatically refreshed when expired.
+
+> **Upgrading from v0.1.0 or earlier?** Tokens were previously stored in plain text with world-readable permissions. Consider rotating your Supabase access tokens from the dashboard after upgrading.
 
 ## Platforms
 

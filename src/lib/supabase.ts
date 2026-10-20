@@ -1,4 +1,4 @@
-import { getAccount, updateAccountTokens, type AccountConfig } from './config.js';
+import { getAccountWithTokens, updateAccountTokens } from './config.js';
 
 const API_BASE = 'https://api.supabase.com';
 const AUTH_BASE = 'https://api.supabase.com/gotrue';
@@ -51,8 +51,13 @@ export async function login(
 }
 
 async function getValidToken(alias: string): Promise<string> {
-  const account = getAccount(alias);
-  if (!account) throw new Error(`Account "${alias}" not found`);
+  // Token'lar keychain'den okunur (dosyada düz metin tutulmaz)
+  const account = await getAccountWithTokens(alias);
+  if (!account) {
+    throw new Error(
+      `Account "${alias}" not found or its tokens are missing. Try: supra add ${alias}`
+    );
+  }
 
   if (Date.now() < account.expiresAt - 60_000) {
     return account.accessToken;
@@ -71,7 +76,7 @@ async function getValidToken(alias: string): Promise<string> {
   }
 
   const data = (await res.json()) as AuthResponse;
-  updateAccountTokens(
+  await updateAccountTokens(
     alias,
     data.access_token,
     data.refresh_token,

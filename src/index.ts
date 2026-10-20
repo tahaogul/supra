@@ -19,6 +19,8 @@ program
 program
   .command('add [alias]')
   .description('Add a new Supabase account')
+  .option('-e, --email <email>', 'Supabase email')
+  .option('-p, --password <password>', 'Supabase password')
   .action(addCommand);
 
 program
